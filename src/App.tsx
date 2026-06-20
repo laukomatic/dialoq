@@ -6,12 +6,8 @@ import "@blocknote/core/fonts/inter.css";
 import { ChatPanel } from "./components/ChatPanel";
 import { CanvasPanel } from "./components/CanvasPanel";
 import { StreamBar } from "./components/StreamBar";
+import { digitalMindNotes } from "./assets/digitalMindNotes";
 import "./App.css";
-
-const defaultNotes = [
-  "welcome", "thoughts", "project-ideas", "notes-archive",
-  "reference", "journal", "ai-concepts",
-];
 
 const AI_NAME = "Dialoq";
 const NOTE_EXCLUDE = new Set(["messages", "archived", "tags"]);
@@ -25,8 +21,16 @@ function streamSlug(): string {
 
 function createDocWithDefaults(): Y.Doc {
   const d = new Y.Doc();
-  for (const name of defaultNotes) {
-    d.getXmlFragment(name);
+  for (const note of digitalMindNotes) {
+    const frag = d.getXmlFragment(note.id);
+    if (note.content) {
+      const block = new Y.XmlElement("paragraph");
+      block.setAttribute("content", `${note.title}\n\n${note.content}`);
+      frag.insert(0, [block]);
+    }
+    if (note.tags.length > 0) {
+      d.getMap("tags").set(note.id, note.tags);
+    }
   }
   return d;
 }

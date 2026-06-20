@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import {
   ReactFlow,
   Controls,
@@ -64,12 +64,33 @@ function edge(source: string, target: string, id: string): Edge {
   };
 }
 
+function extractFragmentText(frag: Y.XmlFragment): string {
+  const parts: string[] = [];
+  for (const child of frag.toArray()) {
+    if (child instanceof Y.XmlText) {
+      parts.push(child.toString());
+    } else if (child instanceof Y.XmlElement) {
+      parts.push(extractElementText(child));
+    }
+  }
+  return parts.join("\n").trim();
+}
+
+function extractElementText(el: Y.XmlElement): string {
+  const parts: string[] = [];
+  for (const child of el.toArray()) {
+    if (child instanceof Y.XmlText) {
+      parts.push(child.toString());
+    } else if (child instanceof Y.XmlElement) {
+      const nested = extractElementText(child);
+      if (nested) parts.push(nested);
+    }
+  }
+  return parts.join(" ");
+}
+
 function extractPreview(frag: Y.XmlFragment): string {
-  const text = frag.toString();
-  return text
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 200);
+  return extractFragmentText(frag).replace(/\s+/g, " ").trim().slice(0, 200);
 }
 
 function computeRelevance(
@@ -158,6 +179,19 @@ export function CanvasPanel({ doc, highlightedNodeIds = [] }: CanvasPanelProps) 
     }
     return Array.from(all).sort();
   }, [doc]);
+
+  // Keyboard shortcut: Ctrl+K / Cmd+K to focus search
+  const searchRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+        e.preventDefault();
+        searchRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   // Full rebuild: compute layout when note set changes
   useEffect(() => {
@@ -278,6 +312,7 @@ export function CanvasPanel({ doc, highlightedNodeIds = [] }: CanvasPanelProps) 
     <div className="canvas-fullscreen">
       <div className="canvas-search-float">
         <input
+          ref={searchRef}
           className="canvas-search-float-input"
           placeholder={tagFilter ? `Filtered by: #${tagFilter}` : "Search notes or #tag..."}
           value={searchQuery}
