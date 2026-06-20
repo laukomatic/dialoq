@@ -13,6 +13,8 @@ import { BlockNoteView } from "@blocknote/mantine";
 import { useCreateBlockNote } from "@blocknote/react";
 import * as Y from "yjs";
 import { extractWikilinks } from "../utils/links";
+import { computeLayout } from "../utils/layout";
+import NoteNode, { type NoteNodeData } from "./NoteNode";
 import "@xyflow/react/dist/style.css";
 import "@blocknote/mantine/style.css";
 
@@ -21,7 +23,6 @@ type CanvasPanelProps = {
   highlightedNodeIds?: string[];
 };
 
-type NoteNodeData = { label: string; highlighted?: boolean; tags?: string[] };
 type NoteNode = Node<NoteNodeData>;
 
 const NOTE_EXCLUDE = new Set(["messages", "archived", "tags"]);
@@ -59,134 +60,210 @@ function edge(source: string, target: string, id: string): Edge {
     target,
     type: "smoothstep",
     animated: false,
-    style: { stroke: "rgba(136, 180, 230, 0.45)", strokeWidth: 1.5 },
+    style: { stroke: "rgba(136, 180, 230, 0.35)", strokeWidth: 1.5 },
   };
 }
 
-function buildNodes(
+function extractPreview(frag: Y.XmlFragment): string {
+  const text = frag.toString();
+  return text
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 200);
+}
+
+function computeRelevance(
+  nodeId: string,
+  focusId: string | null,
+  edges: Edge[]
+): number {
+  if (!focusId) return 0.6;
+  if (nodeId === focusId) return 1.0;
+  const isNeighbor = edges.some(
+    (e) =>
+      (e.source === focusId && e.target === nodeId) ||
+      (e.source === nodeId && e.target === focusId)
+  );
+  if (isNeighbor) return 0.8;
+  return 0.3;
+}
+
+function buildNodeData(
   doc: Y.Doc,
-  highlightedIds: string[] = [],
-  searchQuery = "",
-  tagFilter: string | null = null
-): NoteNode[] {
-  const archived = new Set((doc.getArray("archived") as Y.Array<string>).toArray());
-  const tagMap = doc.getMap("tags") as Y.Map<string[]>;
+  focusId: string | null,
+  edges: Edge[],
+  highlightedIds: string[]
+): NoteNodeData[] {
+  const archived = new Set(
+    (doc.getArray("archived") as Y.Array<string>).toArray()
+  );
   const fragments = noteFragments(doc).filter((k) => !archived.has(k));
 
-  const lowerQuery = searchQuery.toLowerCase().trim();
+  return fragments.map((name) => {
+    let preview = "";
+    try {
+      const frag = doc.getXmlFragment(name);
+      preview = extractPreview(frag);
+    } catch { /* empty */ }
 
-  const cols = 4;
-  const spacingX = 280;
-  const spacingY = 180;
-
-  return fragments.map((name, i) => {
-    const tags = tagMap.get(name) || [];
-    const matchesTag = !tagFilter || tags.includes(tagFilter);
-    const matchesSearch =
-      !lowerQuery ||
-      name.toLowerCase().includes(lowerQuery) ||
-      tags.some((t) => t.toLowerCase().includes(lowerQuery));
-    const visible = matchesTag && matchesSearch;
+    const connectionCount = edges.filter(
+      (e) => e.source === name || e.target === name
+    ).length;
 
     return {
-      id: name,
-      position: {
-        x: 100 + (i % cols) * spacingX + (Math.floor(i / cols) % 2 === 0 ? 0 : 140),
-        y: 80 + Math.floor(i / cols) * spacingY,
-      },
-      data: { label: name, highlighted: highlightedIds.includes(name), tags },
-      type: "default",
-      draggable: visible,
-      selectable: visible,
-      style: {
-        background: highlightedIds.includes(name)
-          ? "rgba(60, 120, 240, 0.3)"
-          : "rgba(20, 30, 60, 0.85)",
-        color: "#b8d4f0",
-        border: highlightedIds.includes(name)
-          ? "2px solid rgba(100, 180, 255, 0.8)"
-          : "1px solid rgba(120, 160, 220, 0.3)",
-        borderRadius: 12,
-        padding: "10px 18px",
-        fontSize: 13,
-        fontWeight: 500,
-        boxShadow: highlightedIds.includes(name)
-          ? "0 0 20px rgba(100, 180, 255, 0.4), 0 0 40px rgba(100, 180, 255, 0.15)"
-          : "none",
-        transition: "all 0.4s ease",
-        opacity: visible ? 1 : 0.12,
-        pointerEvents: visible ? "auto" : "none" as const,
-      },
-    } as NoteNode;
+      label: name,
+      preview,
+      relevance: computeRelevance(name, focusId, edges),
+      highlighted: highlightedIds.includes(name),
+      connections: connectionCount,
+    };
   });
 }
 
-function collectUniqueTags(doc: Y.Doc): string[] {
-  const tagMap = doc.getMap("tags") as Y.Map<string[]>;
-  const all = new Set<string>();
-  for (const [, tags] of tagMap) {
-    if (Array.isArray(tags)) tags.forEach((t) => all.add(t));
-  }
-  return Array.from(all).sort();
+function toReactFlowNode(
+  data: NoteNodeData,
+  pos: { x: number; y: number }
+): NoteNode {
+  const rel = data.relevance;
+  const dimmed = rel < 0.5;
+
+  return {
+    id: data.label,
+    position: pos,
+    data,
+    type: "note",
+    style: {
+      opacity: dimmed ? 0.3 : rel >= 0.8 ? 1 : 0.7,
+      transition: "opacity 0.4s ease",
+    },
+  };
 }
 
+const nodeTypes = { note: NoteNode };
+
 export function CanvasPanel({ doc, highlightedNodeIds = [] }: CanvasPanelProps) {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const [focusId, setFocusId] = useState<string | null>(null);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
-
-  const allTags = useMemo(() => collectUniqueTags(doc), [doc]);
-
-  const [nodes, setNodes, onNodesChange] = useNodesState<NoteNode>(
-    buildNodes(doc, highlightedNodeIds, searchQuery, tagFilter)
-  );
+  const [nodes, setNodes, onNodesChange] = useNodesState<NoteNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
-  const refreshNodes = useCallback(() => {
-    setNodes(buildNodes(doc, highlightedNodeIds, searchQuery, tagFilter));
-  }, [doc, highlightedNodeIds, searchQuery, tagFilter, setNodes]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
 
-  useEffect(() => { refreshNodes(); }, [refreshNodes]);
-
-  useEffect(() => {
-    const update = () => refreshNodes();
-    const unsubs: (() => void)[] = [];
-    for (const name of doc.share.keys()) {
-      try {
-        const f = doc.getXmlFragment(name);
-        f.observeDeep(update);
-        unsubs.push(() => f.unobserveDeep(update));
-      } catch { /* skip */ }
+  const allTags = useMemo(() => {
+    const tagMap = doc.getMap("tags") as Y.Map<string[]>;
+    const all = new Set<string>();
+    for (const [, tags] of tagMap) {
+      if (Array.isArray(tags)) tags.forEach((t) => all.add(t));
     }
-    doc.getArray("messages").observeDeep(update);
-    unsubs.push(() => doc.getArray("messages").unobserveDeep(update));
-    doc.getMap("tags").observeDeep(update);
-    unsubs.push(() => doc.getMap("tags").unobserveDeep(update));
-    doc.getArray("archived").observeDeep(update);
-    unsubs.push(() => doc.getArray("archived").unobserveDeep(update));
-    return () => unsubs.forEach((f) => f());
-  }, [doc, refreshNodes]);
+    return Array.from(all).sort();
+  }, [doc]);
 
+  // Full rebuild: compute layout when note set changes
   useEffect(() => {
-    const update = () => setEdges(scanLinks(doc));
-    update();
-    const unsubs: (() => void)[] = [];
-    for (const name of doc.share.keys()) {
-      try {
-        const f = doc.getXmlFragment(name);
-        f.observeDeep(update);
-        unsubs.push(() => f.unobserveDeep(update));
-      } catch { /* skip */ }
-    }
-    return () => unsubs.forEach((f) => f());
-  }, [doc, setEdges]);
+    const newEdges = scanLinks(doc);
+    setEdges(newEdges);
 
+    const data = buildNodeData(doc, focusId, newEdges, highlightedNodeIds);
+    if (data.length === 0) {
+      setNodes([]);
+      return;
+    }
+
+    const positioned = computeLayout(
+      data.map((d) => d.label),
+      newEdges.map((e) => ({ source: e.source, target: e.target })),
+      window.innerWidth,
+      window.innerHeight
+    );
+
+    const posMap = new Map(positioned.map((p) => [p.id, { x: p.x, y: p.y }]));
+    setNodes(data.map((d) => toReactFlowNode(d, posMap.get(d.label) || { x: 0, y: 0 })));
+  }, [doc]);
+
+  // Update relevance when focus changes (keep positions)
+  useEffect(() => {
+    setNodes((prev) => {
+      const data = buildNodeData(doc, focusId, edges, highlightedNodeIds);
+      const dataMap = new Map(data.map((d) => [d.label, d]));
+      return prev.map((n) => {
+        const d = dataMap.get(n.id);
+        if (!d) return n;
+        return toReactFlowNode(d, n.position);
+      });
+    });
+  }, [focusId, highlightedNodeIds]);
+
+  // Handle node clicks: focus + open editor
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: NoteNode) => {
+      setFocusId((prev) => (prev === node.id ? null : node.id));
       setSelectedNode(node.id);
     },
     []
   );
+
+  // Re-layout on window resize
+  useEffect(() => {
+    const onResize = () => {
+      const data = buildNodeData(doc, focusId, edges, highlightedNodeIds);
+      if (data.length === 0) return;
+      const positioned = computeLayout(
+        data.map((d) => d.label),
+        edges.map((e) => ({ source: e.source, target: e.target })),
+        window.innerWidth,
+        window.innerHeight
+      );
+      const posMap = new Map(positioned.map((p) => [p.id, { x: p.x, y: p.y }]));
+      setNodes((prev) =>
+        prev.map((n) => ({
+          ...n,
+          position: posMap.get(n.id) || n.position,
+        }))
+      );
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [doc, focusId, edges, highlightedNodeIds]);
+
+  // Observe Yjs changes to re-build + re-layout
+  useEffect(() => {
+    const rebuild = () => {
+      const newEdges = scanLinks(doc);
+      setEdges(newEdges);
+
+      const data = buildNodeData(doc, focusId, newEdges, highlightedNodeIds);
+      if (data.length === 0) {
+        setNodes([]);
+        return;
+      }
+      const positioned = computeLayout(
+        data.map((d) => d.label),
+        newEdges.map((e) => ({ source: e.source, target: e.target })),
+        window.innerWidth,
+        window.innerHeight
+      );
+      const posMap = new Map(positioned.map((p) => [p.id, { x: p.x, y: p.y }]));
+      setNodes(data.map((d) => toReactFlowNode(d, posMap.get(d.label) || { x: 0, y: 0 })));
+    };
+
+    const unsubs: (() => void)[] = [];
+    for (const name of doc.share.keys()) {
+      try {
+        const f = doc.getXmlFragment(name);
+        f.observeDeep(rebuild);
+        unsubs.push(() => f.unobserveDeep(rebuild));
+      } catch { /* skip */ }
+    }
+    doc.getArray("messages").observeDeep(rebuild);
+    unsubs.push(() => doc.getArray("messages").unobserveDeep(rebuild));
+    doc.getMap("tags").observeDeep(rebuild);
+    unsubs.push(() => doc.getMap("tags").unobserveDeep(rebuild));
+    doc.getArray("archived").observeDeep(rebuild);
+    unsubs.push(() => doc.getArray("archived").unobserveDeep(rebuild));
+
+    return () => unsubs.forEach((f) => f());
+  }, [doc, focusId, highlightedNodeIds]);
 
   const activeFragment = (() => {
     if (!selectedNode) return null;
@@ -202,13 +279,21 @@ export function CanvasPanel({ doc, highlightedNodeIds = [] }: CanvasPanelProps) 
       <div className="canvas-search-float">
         <input
           className="canvas-search-float-input"
-          placeholder="Search notes..."
+          placeholder={tagFilter ? `Filtered by: #${tagFilter}` : "Search notes or #tag..."}
           value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
+          onChange={(e) => {
+            const val = e.target.value;
+            if (val.startsWith("#")) {
+              setTagFilter(val.slice(1) || null);
+              setSearchQuery("");
+            } else {
+              setSearchQuery(val);
+              setTagFilter(null);
+            }
+          }}
         />
         {allTags.length > 0 && (
           <div className="canvas-tag-bar">
-            <span className="canvas-tag-label">Tags:</span>
             {allTags.map((tag) => (
               <button
                 key={tag}
@@ -228,9 +313,10 @@ export function CanvasPanel({ doc, highlightedNodeIds = [] }: CanvasPanelProps) 
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onNodeClick={onNodeClick}
+        nodeTypes={nodeTypes}
         connectionMode={ConnectionMode.Loose}
         fitView
-        fitViewOptions={{ padding: 0.4, duration: 800 }}
+        fitViewOptions={{ padding: 0.3, duration: 600 }}
         style={{ background: "transparent" }}
         defaultEdgeOptions={{
           type: "smoothstep",

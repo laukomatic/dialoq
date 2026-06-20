@@ -257,7 +257,7 @@ function App() {
 
   return (
     <div className="app-container">
-      <StreamBar streamName={streamName} />
+      <StreamBar />
       <CanvasPanel doc={doc} highlightedNodeIds={highlightedNodeIds} />
       <ChatPanel
         messages={chatMessages}
