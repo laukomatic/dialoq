@@ -8,3 +8,64 @@ html, body, #root {
   height: 100%;
   overflow: hidden;
 }
+
+.app-layout {
+  display: grid;
+  grid-template-columns: 38fr 62fr;
+  height: 100%;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panel-header {
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #888;
+  background: #fafafa;
+  border-bottom: 1px solid #e5e5e5;
+  flex-shrink: 0;
+}
+
+.panel-body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.chat-panel {
+  border-right: 1px solid #e5e5e5;
+  background: #fefefe;
+}
+
+.chat-panel .panel-header {
+  background: #f7f7ff;
+}
+
+.canvas-panel {
+  background: #fff;
+}
+
+@media (prefers-color-scheme: dark) {
+  .panel-header {
+    background: #1e1e1e;
+    border-color: #333;
+    color: #aaa;
+  }
+  .chat-panel {
+    border-color: #333;
+    background: #1a1a1a;
+  }
+  .chat-panel .panel-header {
+    background: #1a1a2e;
+  }
+  .canvas-panel {
+    background: #111;
+  }
+}

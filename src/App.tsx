@@ -1,34 +1,23 @@
-import { BlockNoteView } from "@blocknote/mantine";
-import { useCreateBlockNote } from "@blocknote/react";
 import * as Y from "yjs";
-import "@blocknote/mantine/style.css";
 import "@blocknote/core/fonts/inter.css";
+import { ChatPanel } from "./components/ChatPanel";
+import { CanvasPanel } from "./components/CanvasPanel";
 import "./App.css";
 
-// One Y.Doc per app session — holds all note fragments.
-// Each fragment is a named "slot" inside the doc, identified by a key.
-// "document" here is just the default inbox fragment.
-// Later, each structured note will live in its own fragment (e.g. "note-abc123").
+// One Y.Doc per stream. Each stream has two fragments:
+//   "chat"   → chronological dialogue
+//   "canvas" → AI-structured notes, mind map data
 const doc = new Y.Doc();
-const fragment = doc.getXmlFragment("document");
+const chatFragment = doc.getXmlFragment("chat");
+const canvasFragment = doc.getXmlFragment("canvas");
 
 function App() {
-  const editor = useCreateBlockNote(
-    {
-      collaboration: {
-        fragment,
-        user: { name: "Me", color: "#f19837" },
-      },
-    },
-    []
+  return (
+    <div className="app-layout">
+      <ChatPanel fragment={chatFragment} />
+      <CanvasPanel fragment={canvasFragment} />
+    </div>
   );
-
-  // BlockNoteView from @blocknote/mantine includes built-in:
-  // - slash menu (press "/")
-  // - side menu (hover left of a block)
-  // - formatting toolbar (select text)
-  // No extra configuration needed.
-  return <BlockNoteView editor={editor} />;
 }
 
 export default App;
