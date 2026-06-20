@@ -6,13 +6,15 @@ import "./App.css";
 
 const doc = new Y.Doc();
 const chatMessages = doc.getArray("messages") as Y.Array<Y.Map<unknown>>;
-const canvasFragment = doc.getXmlFragment("canvas");
+
+// Create the inbox fragment so it appears as a graph node immediately.
+doc.getXmlFragment("inbox");
 
 function App() {
   return (
-    <div className="app-layout">
+    <div className="app-container">
+      <CanvasPanel doc={doc} />
       <ChatPanel messages={chatMessages} userName="You" />
-      <CanvasPanel fragment={canvasFragment} doc={doc} />
     </div>
   );
 }
