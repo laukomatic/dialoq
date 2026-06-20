@@ -140,6 +140,24 @@ html, body, #root {
   color: #4dabf7;
 }
 
+/* ---- wikilink pills (inside chat bubbles) ---- */
+
+.wikilink-pill {
+  display: inline-block;
+  background: #e8f0fe;
+  color: #1a73e8;
+  padding: 1px 6px;
+  border-radius: 6px;
+  font-weight: 500;
+  font-size: 0.92em;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.wikilink-pill:hover {
+  background: #d2e3fc;
+}
+
 /* ---- chat input ---- */
 
 .chat-input-area {
@@ -193,15 +211,18 @@ html, body, #root {
   background: #fff;
 }
 
-.canvas-search-bar {
-  padding: 8px 12px;
+.canvas-toolbar {
+  display: flex;
+  gap: 8px;
+  padding: 6px 10px;
   border-bottom: 1px solid #e5e5e5;
+  align-items: center;
   flex-shrink: 0;
 }
 
 .canvas-search-input {
-  width: 100%;
-  padding: 6px 12px;
+  flex: 1;
+  padding: 4px 10px;
   border: 1px solid #ddd;
   border-radius: 8px;
   font: inherit;
@@ -215,21 +236,55 @@ html, body, #root {
   background: #fff;
 }
 
+.canvas-toggle-btn {
+  padding: 4px 12px;
+  background: transparent;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  color: #666;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.canvas-toggle-btn:hover {
+  background: #f0f0f0;
+  border-color: #bbb;
+}
+
 .canvas-main {
   flex: 1;
   display: grid;
   grid-template-columns: 55fr 45fr;
   overflow: hidden;
+  transition: grid-template-columns 0.25s ease;
+}
+
+.canvas-main--expanded {
+  grid-template-columns: 1fr;
 }
 
 .canvas-graph {
   border-right: 1px solid #e5e5e5;
   background: #fcfcfc;
+  transition: border-color 0.25s;
+}
+
+.canvas-main--expanded .canvas-graph {
+  border-right: none;
 }
 
 .canvas-detail {
   overflow-y: auto;
   overflow-x: hidden;
+  animation: slide-in 0.2s ease;
+}
+
+@keyframes slide-in {
+  from { opacity: 0; transform: translateX(10px); }
+  to { opacity: 1; transform: translateX(0); }
 }
 
 .canvas-detail-empty {
@@ -258,6 +313,15 @@ html, body, #root {
   background: #fafafa;
   border-bottom: 1px solid #e5e5e5;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.note-editor-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .note-editor-body {
@@ -310,10 +374,24 @@ html, body, #root {
     background: #111;
   }
 
+  .canvas-toolbar {
+    border-color: #333;
+  }
+
   .canvas-search-input {
     background: #222;
     border-color: #444;
     color: #eee;
+  }
+
+  .canvas-toggle-btn {
+    border-color: #444;
+    color: #aaa;
+  }
+
+  .canvas-toggle-btn:hover {
+    background: #222;
+    border-color: #666;
   }
 
   .canvas-graph {
@@ -325,5 +403,14 @@ html, body, #root {
     background: #1a1a1a;
     border-color: #333;
     color: #aaa;
+  }
+
+  .wikilink-pill {
+    background: #1a3550;
+    color: #8ab4f8;
+  }
+
+  .wikilink-pill:hover {
+    background: #203a5c;
   }
 }

@@ -14,11 +14,18 @@ Dialogue-based note-taking. One continuous BlockNote editor surface serves as bo
 ## Architecture
 ```
 src-tauri/    Rust backend — AI orchestration, Yjs sync, file I/O, CRDT persistence
-src/          React frontend — single BlockNote surface, Tauri IPC bridge
+src/          React frontend — dual-panel layout (chat + graph canvas)
+  components/
+    ChatPanel.tsx     — custom chat UI (rich text BlockNote input, message bubbles)
+    CanvasPanel.tsx   — ReactFlow graph + BlockNote note editor (collapsible)
+  utils/
+    links.ts          — [[wikilink]] parser and HTML renderer
 ```
+- **Chat panel**: Custom chat with Yjs-backed messages (Y.Array<Y.Map>). BlockNote editor for rich-text input. Messages stored as HTML, rendered with wikilink pill styling.
+- **Canvas panel**: ReactFlow graph (nodes = notes, edges = wikilinks). Click node → open BlockNote editor in detail panel. Collapsible with toggle button.
+- **Wikilinks**: `[[note-id|Title]]` syntax (Obsidian/Logseq standard). AI writes them as plain text. Link scanner extracts them from all Y.Doc fragments to build graph edges.
+- One Y.Doc per stream with multiple named fragments (one per note) + Y.Array for chat messages.
 - AI calls are proxied/coordinated through Rust, not called directly from the frontend
-- The Yjs document lives in Rust; the frontend binds via `yrs` ↔ `yjs` interop
-- No separate chat panel — AI responses are inserted as BlockNote blocks into the same document
 
 ## Commands
 
@@ -69,3 +76,16 @@ pnpm test                # Not yet configured — add Vitest
 - **y-websocket**: Simple open-source WebSocket provider. No auth, no built-in persistence. Only suitable for public/unauthenticated use cases.
 
 Client: `@y-sweet/client` on the frontend. Server: `y-sweet` (self-hosted or Jamsocket cloud).
+
+## Future: 3D Graph Canvas (planned, not implemented)
+
+The 2D ReactFlow graph is MVP. A 3D graph would better represent the spatial thinking vision (like Constella's infinite canvas, but in 3D). Key considerations:
+
+- **Library**: `@react-three/fiber` (Three.js for React) + `@react-three/drei` for helpers
+- **Node layout**: Force-directed 3D graph (like `three-forcegraph` or `ngraph.forcelayout3d`)
+- **Navigation**: Orbit controls (rotate, pan, zoom). Nodes are spheres, edges are lines/curves.
+- **Interaction**: Click node → open detail panel (same as current 2D). Hover → show preview card.
+- **Performance**: For <1000 nodes, Three.js handles fine. Instanced rendering for >1000.
+- **Fallback**: Keep 2D ReactFlow as the default. 3D as an optional view toggle.
+- **Challenge**: Text labels in 3D are harder to render cleanly. Use canvas-texture sprites or CSS overlays.
+- **Timeline**: Post-MVP, after sync and AI are functional.

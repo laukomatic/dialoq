@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { BlockNoteView } from "@blocknote/mantine";
 import { useCreateBlockNote } from "@blocknote/react";
 import * as Y from "yjs";
+import { renderWikilinksInHtml } from "../utils/links";
 import "@blocknote/mantine/style.css";
 
 type ChatPanelProps = {
@@ -67,7 +68,9 @@ export function ChatPanel({ messages, userName }: ChatPanelProps) {
             </div>
             <div
               className="chat-bubble__text"
-              dangerouslySetInnerHTML={{ __html: msg.html }}
+              dangerouslySetInnerHTML={{
+                __html: renderWikilinksInHtml(msg.html),
+              }}
             />
           </div>
         ))}
