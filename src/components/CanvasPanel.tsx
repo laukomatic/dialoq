@@ -7,7 +7,6 @@ import {
   type Edge,
   useNodesState,
   useEdgesState,
-  MarkerType,
   ConnectionMode,
 } from "@xyflow/react";
 import { BlockNoteView } from "@blocknote/mantine";
@@ -31,41 +30,86 @@ function scanLinks(doc: Y.Doc): Edge[] {
     (k) => k !== "messages"
   );
 
+  // Seed edges — show relationships between sample notes.
+  const seeds: [string, string][] = [
+    ["inbox", "ideas"],
+    ["inbox", "projects"],
+    ["ideas", "research"],
+    ["ideas", "projects"],
+    ["projects", "project-alpha"],
+    ["projects", "project-beta"],
+    ["research", "learning"],
+    ["research", "project-alpha"],
+    ["research", "ideas"],
+    ["personal", "ideas"],
+    ["meetings", "project-alpha"],
+    ["meetings", "project-beta"],
+    ["learning", "research"],
+  ];
+
+  for (const [source, target] of seeds) {
+    if (!fragments.includes(source) || !fragments.includes(target)) continue;
+    const id = `seed-${source}->${target}`;
+    if (!seen.has(id)) {
+      seen.add(id);
+      edges.push(edge(source, target, id));
+    }
+  }
+
+  // Dynamic edges from [[wikilinks]] in fragment content.
   for (const fragName of fragments) {
     try {
       const frag = doc.getXmlFragment(fragName);
       const text = frag.toString();
       for (const link of extractWikilinks(text)) {
-        const edgeId = `${fragName}->${link.noteId}`;
-        if (!seen.has(edgeId) && fragments.includes(link.noteId)) {
-          seen.add(edgeId);
-          edges.push({
-            id: edgeId,
-            source: fragName,
-            target: link.noteId,
-            animated: true,
-            markerEnd: { type: MarkerType.ArrowClosed },
-            style: { stroke: "#4dabf7", strokeWidth: 2 },
-          });
+        const id = `dyn-${fragName}->${link.noteId}`;
+        if (!seen.has(id) && fragments.includes(link.noteId)) {
+          seen.add(id);
+          edges.push(edge(fragName, link.noteId, id));
         }
       }
     } catch { /* skip */ }
   }
+
   return edges;
+}
+
+function edge(source: string, target: string, id: string): Edge {
+  return {
+    id,
+    source,
+    target,
+    type: "smoothstep",
+    animated: false,
+    style: { stroke: "rgba(136, 180, 230, 0.45)", strokeWidth: 1.5 },
+  };
 }
 
 function buildNodes(doc: Y.Doc): NoteNode[] {
   const fragments = Array.from(doc.share.keys()).filter(
     (k) => k !== "messages"
   );
+  // Spread nodes in a wider, more organic pattern.
+  const cols = 4;
+  const spacingX = 280;
+  const spacingY = 180;
   return fragments.map((name, i) => ({
     id: name,
     position: {
-      x: 200 + (i % 5) * 200,
-      y: 100 + Math.floor(i / 5) * 150,
+      x: 100 + (i % cols) * spacingX + (Math.floor(i / cols) % 2 === 0 ? 0 : 140),
+      y: 80 + Math.floor(i / cols) * spacingY,
     },
     data: { label: name },
     type: "default",
+    style: {
+      background: "rgba(20, 30, 60, 0.85)",
+      color: "#b8d4f0",
+      border: "1px solid rgba(120, 160, 220, 0.3)",
+      borderRadius: 12,
+      padding: "10px 18px",
+      fontSize: 13,
+      fontWeight: 500,
+    },
   }));
 }
 
@@ -107,7 +151,7 @@ export function CanvasPanel({ doc }: CanvasPanelProps) {
   }, [doc, setEdges]);
 
   const onNodeClick = useCallback(
-    (_event: React.MouseEvent, node: NoteNode) => {
+    (_: React.MouseEvent, node: NoteNode) => {
       setSelectedNode(node.id);
     },
     []
@@ -140,10 +184,21 @@ export function CanvasPanel({ doc }: CanvasPanelProps) {
         onNodeClick={onNodeClick}
         connectionMode={ConnectionMode.Loose}
         fitView
-        fitViewOptions={{ padding: 0.3, duration: 500 }}
+        fitViewOptions={{ padding: 0.4, duration: 800 }}
+        style={{ background: "transparent" }}
+        defaultEdgeOptions={{
+          type: "smoothstep",
+          style: { stroke: "rgba(136, 180, 230, 0.35)", strokeWidth: 1.5 },
+        }}
       >
-        <Background />
-        <Controls />
+        <Background color="rgba(255,255,255,0.04)" gap={32} size={1} />
+        <Controls
+          style={{
+            background: "rgba(20, 30, 60, 0.7)",
+            border: "1px solid rgba(120, 160, 220, 0.2)",
+            borderRadius: 8,
+          }}
+        />
       </ReactFlow>
 
       {selectedNode && activeFragment && (

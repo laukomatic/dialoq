@@ -7,8 +7,16 @@ import "./App.css";
 const doc = new Y.Doc();
 const chatMessages = doc.getArray("messages") as Y.Array<Y.Map<unknown>>;
 
-// Create the inbox fragment so it appears as a graph node immediately.
-doc.getXmlFragment("inbox");
+// Create fragments — each becomes a node on the graph.
+// The canvas adds seed edges to show how they relate.
+// When users type [[wikilinks]], the scanner adds dynamic edges.
+const notes = [
+  "inbox", "ideas", "projects", "project-alpha", "project-beta",
+  "research", "personal", "learning", "meetings",
+];
+for (const name of notes) {
+  doc.getXmlFragment(name);
+}
 
 function App() {
   return (

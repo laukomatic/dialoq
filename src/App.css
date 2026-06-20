@@ -23,6 +23,8 @@ html, body, #root {
 .canvas-fullscreen {
   position: absolute;
   inset: 0;
+  background: radial-gradient(ellipse at 30% 20%, #0d1b2a 0%, #060e18 50%, #040a10 100%);
+  overflow: hidden;
 }
 
 /* ---- floating search bar ---- */
@@ -108,7 +110,7 @@ html, body, #root {
 
 .chat-bubble--user {
   align-self: flex-end;
-  background: #d0e6ff;
+  background: #eaf3ff;
   border-bottom-right-radius: 3px;
 }
 
@@ -283,7 +285,7 @@ html, body, #root {
   }
 
   .chat-bubble--user {
-    background: #1a3a5a;
+    background: #1a3c62;
   }
 
   .chat-bubble--ai {
