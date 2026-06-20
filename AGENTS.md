@@ -1,11 +1,12 @@
 # Dialoq — Agent Instructions
 
 ## Vision
-Dialogue-based note-taking. One continuous BlockNote editor surface serves as both chat and notes. Free-form writing → AI asks proactive questions → the document evolves into structured, searchable notes in-place. The inbox IS the document.
+Dialogue-based note-taking. Custom floating chat + full-screen ReactFlow graph canvas. Free-form conversation → AI structures notes on the spatial canvas. Each chat stream is a self-contained Y.Doc (messages + note graph).
 
 ## Stack
 - **Desktop/Mobile**: Tauri v2 (Rust backend, React/TypeScript frontend)
-- **Editor**: BlockNote (`@blocknote/core` + `@blocknote/react`) — block-based rich text
+- **Editor**: BlockNote (`@blocknote/core` + `@blocknote/react` + `@blocknote/mantine`) — block-based rich text for notes
+- **Graph canvas**: ReactFlow (`@xyflow/react`) — 2D spatial graph, nodes = notes, edges = wikilinks
 - **Sync**: Yjs CRDT (`yjs` + `@y-sweet/client` for transport)
 - **Rust Yjs**: `yrs` crate for CRDT persistence and sync coordination in the backend
 - **AI**: LM Studio local API (`http://localhost:1234/v1`) primary; OpenCode API as cloud fallback
@@ -13,19 +14,21 @@ Dialogue-based note-taking. One continuous BlockNote editor surface serves as bo
 
 ## Architecture
 ```
-src-tauri/    Rust backend — AI orchestration, Yjs sync, file I/O, CRDT persistence
-src/          React frontend — dual-panel layout (chat + graph canvas)
+src-tauri/    Rust backend — stream file I/O (save/load/list), Yjs persistence
+src/          React frontend — streaming chat + graph canvas
   components/
-    ChatPanel.tsx     — custom chat UI (rich text BlockNote input, message bubbles)
-    CanvasPanel.tsx   — ReactFlow graph + BlockNote note editor (collapsible)
+    ChatPanel.tsx     — custom chat UI (textarea input, Yjs-backed message bubbles)
+    CanvasPanel.tsx   — ReactFlow full-screen graph + floating BlockNote editor
+    StreamBar.tsx     — top bar (stream title, new chat, search/switch streams)
   utils/
     links.ts          — [[wikilink]] parser and HTML renderer
 ```
-- **Chat panel**: Custom chat with Yjs-backed messages (Y.Array<Y.Map>). BlockNote editor for rich-text input. Messages stored as HTML, rendered with wikilink pill styling.
-- **Canvas panel**: ReactFlow graph (nodes = notes, edges = wikilinks). Click node → open BlockNote editor in detail panel. Collapsible with toggle button.
-- **Wikilinks**: `[[note-id|Title]]` syntax (Obsidian/Logseq standard). AI writes them as plain text. Link scanner extracts them from all Y.Doc fragments to build graph edges.
+- **Chat panel**: Yjs-backed messages (Y.Array<Y.Map<{sender, html, timestamp}>). Textarea input, Enter to send. Messages stored as HTML, rendered with wikilink pill styling. Floating semi-transparent window at bottom center — no BlockNote in chat area.
+- **Canvas panel**: Full-screen ReactFlow graph (dark space-themed). Nodes = Y.Doc fragments. Edges = seed relationships + wikilinks. Click node → floating BlockNote editor opens centered. Nodes/edges auto-update from fragment changes and `[[wikilinks]]`.
+- **Wikilinks**: `[[note-id|Title]]` syntax (Obsidian/Logseq standard). Regex parser in `src/utils/links.ts`. Link scanner extracts from all Y.Doc fragments to build graph edges. Rendered as blue pills in chat messages.
+- **Stream lifecycle**: Every launch = fresh empty stream (timestamp slug `YYYY-MM-DD-HHmm`). `+ New` creates fresh. `Search` opens modal to list/switch past streams. Auto-saves on every Y.Doc change (1s debounce) via Tauri IPC.
+- **Persistence**: Three Rust Tauri commands: `save_stream(name, Vec<u8>)`, `load_stream(name) -> Vec<u8>`, `list_streams() -> Vec<String>`. Files at `~/.dialoq/streams/{name}.ydoc` (platform app-data dir). Binary Yjs update format.
 - One Y.Doc per stream with multiple named fragments (one per note) + Y.Array for chat messages.
-- AI calls are proxied/coordinated through Rust, not called directly from the frontend
 
 ## Commands
 
@@ -61,6 +64,7 @@ pnpm test                # Not yet configured — add Vitest
 - AI_API_URL reads from env/config, never hardcoded — defaults to `http://localhost:1234/v1` (LM Studio) with fallback to OpenCode API
 - All editor state is Yjs-native; BlockNote's built-in Yjs binding is the sole state management
 - Tauri commands (`#[tauri::command]`) are the only Rust↔frontend boundary
+- Chat panel uses plain textarea, NOT BlockNote — block-level formatting (headings, lists) is intentionally excluded from chat
 
 ## Environment & Gotchas
 - **All commands MUST run from project root**: `pnpm tauri dev`, `pnpm dev`, etc. use CWD — Tauri does not auto-detect the project. Always `cd` to the project root first.
@@ -70,6 +74,7 @@ pnpm test                # Not yet configured — add Vitest
 - Tauri v2 android requires `ANDROID_HOME` set and NDK 26+ — verify with `pnpm tauri android init`
 - `y-sweet` needs a sync server URL; set via env `SWEET_SERVER_URL` (use local `y-sweet` for dev: `npx y-sweet serve`)
 - `src-tauri/src/lib.rs` uses `dialoq_lib` as the lib name (required on Windows to avoid name conflict with the binary `dialoq.exe`)
+- BlockNote editor uses `@blocknote/mantine` `BlockNoteView`, NOT `@blocknote/react` `BlockNoteViewRaw` — the latter has no built-in slash menu/toolbar
 
 ## Sync: y-sweet (chosen over y-websocket)
 - **y-sweet** (chosen): Built-in auth, persistence, and sync by the Yjs/Jamsocket team. Self-hostable. Required because notes are private — y-websocket has zero access control (anyone with the URL can read/write).
