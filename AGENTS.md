@@ -6,7 +6,7 @@ Dialogue-based note-taking. One continuous BlockNote editor surface serves as bo
 ## Stack
 - **Desktop/Mobile**: Tauri v2 (Rust backend, React/TypeScript frontend)
 - **Editor**: BlockNote (`@blocknote/core` + `@blocknote/react`) — block-based rich text
-- **Sync**: Yjs CRDT (`yjs` + `y-websocket` for transport)
+- **Sync**: Yjs CRDT (`yjs` + `@y-sweet/client` for transport)
 - **Rust Yjs**: `yrs` crate for CRDT persistence and sync coordination in the backend
 - **AI**: LM Studio local API (`http://localhost:1234/v1`) primary; OpenCode API as cloud fallback
 - **Package manager**: pnpm
@@ -60,11 +60,11 @@ pnpm test                # Not yet configured — add Vitest
 - LM Studio must be running and serving before `pnpm tauri dev` (AI features fail gracefully if unreachable)
 - Vite dev server runs on port 1420 (fixed in `vite.config.ts`); Tauri expects this
 - Tauri v2 android requires `ANDROID_HOME` set and NDK 26+ — verify with `pnpm tauri android init`
-- `y-websocket` needs a sync server URL; set via env `SYNC_SERVER_URL` (use local `y-websocket` for dev: `npx y-websocket`)
+- `y-sweet` needs a sync server URL; set via env `SWEET_SERVER_URL` (use local `y-sweet` for dev: `npx y-sweet serve`)
 - `src-tauri/src/lib.rs` uses `dialoq_lib` as the lib name (required on Windows to avoid name conflict with the binary `dialoq.exe`)
 
-## Sync: y-websocket vs. y-sweet
-- **y-websocket** (chosen): Simple open-source WebSocket provider. You run the server yourself. No built-in persistence — you handle document storage on the server side via `yrs`. Good for your own-server setup.
-- **y-sweet**: Batteries-included Yjs sync by the Yjs team. Built-in auth, persistence, and hosting. Also self-hostable but more opinionated. Overkill for starting out.
+## Sync: y-sweet (chosen over y-websocket)
+- **y-sweet** (chosen): Built-in auth, persistence, and sync by the Yjs/Jamsocket team. Self-hostable. Required because notes are private — y-websocket has zero access control (anyone with the URL can read/write).
+- **y-websocket**: Simple open-source WebSocket provider. No auth, no built-in persistence. Only suitable for public/unauthenticated use cases.
 
-Decision: we use `y-websocket` now because you have your own server and it keeps the initial implementation simple. If auth or managed persistence becomes needed, `y-sweet` is the upgrade path.
+Client: `@y-sweet/client` on the frontend. Server: `y-sweet` (self-hosted or Jamsocket cloud).

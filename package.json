@@ -14,9 +14,9 @@
     "@blocknote/react": "^0.51.4",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-opener": "^2",
+    "@y-sweet/client": "^0.9.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "y-websocket": "^3.0.0",
     "yjs": "^13.6.31"
   },
   "devDependencies": {
