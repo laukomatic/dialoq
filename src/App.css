@@ -81,7 +81,7 @@ html, body, #root {
 
 .chat-bubble--user {
   align-self: flex-end;
-  background: #e3f2fd;
+  background: #e8f4fd;
   border-bottom-right-radius: 4px;
 }
 
@@ -104,8 +104,40 @@ html, body, #root {
 }
 
 .chat-bubble__text {
-  white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* Make HTML-rendered message content look clean inside bubbles */
+.chat-bubble__text p {
+  margin: 0 0 4px;
+}
+
+.chat-bubble__text p:last-child {
+  margin-bottom: 0;
+}
+
+.chat-bubble__text h1,
+.chat-bubble__text h2,
+.chat-bubble__text h3 {
+  font-size: 15px;
+  margin: 6px 0 3px;
+}
+
+.chat-bubble__text ul,
+.chat-bubble__text ol {
+  margin: 4px 0;
+  padding-left: 18px;
+}
+
+.chat-bubble__text code {
+  font-size: 12px;
+  background: rgba(0, 0, 0, 0.06);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.chat-bubble__text a {
+  color: #4dabf7;
 }
 
 /* ---- chat input ---- */
@@ -119,23 +151,27 @@ html, body, #root {
   flex-shrink: 0;
 }
 
-.chat-input {
+.chat-input-editor {
   flex: 1;
-  resize: none;
   border: 1px solid #ddd;
   border-radius: 8px;
-  padding: 8px 10px;
-  font: inherit;
-  font-size: 14px;
-  line-height: 1.4;
-  outline: none;
+  background: #fff;
+  overflow: hidden;
+  min-height: 44px;
 }
 
-.chat-input:focus {
+.chat-input-editor:focus-within {
   border-color: #4dabf7;
 }
 
+/* Keep the input editor compact */
+.chat-input-editor .bn-container {
+  min-height: 44px;
+  padding: 6px 10px;
+}
+
 .chat-send-btn {
+  align-self: flex-end;
   padding: 6px 16px;
   background: #4dabf7;
   color: #fff;
@@ -157,6 +193,78 @@ html, body, #root {
   background: #fff;
 }
 
+.canvas-search-bar {
+  padding: 8px 12px;
+  border-bottom: 1px solid #e5e5e5;
+  flex-shrink: 0;
+}
+
+.canvas-search-input {
+  width: 100%;
+  padding: 6px 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+  background: #fafafa;
+}
+
+.canvas-search-input:focus {
+  border-color: #4dabf7;
+  background: #fff;
+}
+
+.canvas-main {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 55fr 45fr;
+  overflow: hidden;
+}
+
+.canvas-graph {
+  border-right: 1px solid #e5e5e5;
+  background: #fcfcfc;
+}
+
+.canvas-detail {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.canvas-detail-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #bbb;
+  font-style: italic;
+  font-size: 14px;
+}
+
+/* ---- note editor (inside canvas detail) ---- */
+
+.note-editor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.note-editor-header {
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #666;
+  background: #fafafa;
+  border-bottom: 1px solid #e5e5e5;
+  flex-shrink: 0;
+}
+
+.note-editor-body {
+  flex: 1;
+  overflow-y: auto;
+}
+
 /* ---- dark mode ---- */
 
 @media (prefers-color-scheme: dark) {
@@ -176,11 +284,15 @@ html, body, #root {
   }
 
   .chat-bubble--user {
-    background: #1a3a5c;
+    background: #1a3550;
   }
 
   .chat-bubble--ai {
     background: #2a2a2a;
+  }
+
+  .chat-bubble__text code {
+    background: rgba(255, 255, 255, 0.08);
   }
 
   .chat-input-area {
@@ -188,7 +300,7 @@ html, body, #root {
     border-color: #333;
   }
 
-  .chat-input {
+  .chat-input-editor {
     background: #222;
     border-color: #444;
     color: #eee;
@@ -196,5 +308,22 @@ html, body, #root {
 
   .canvas-panel {
     background: #111;
+  }
+
+  .canvas-search-input {
+    background: #222;
+    border-color: #444;
+    color: #eee;
+  }
+
+  .canvas-graph {
+    border-color: #333;
+    background: #161616;
+  }
+
+  .note-editor-header {
+    background: #1a1a1a;
+    border-color: #333;
+    color: #aaa;
   }
 }
