@@ -4,17 +4,17 @@ import { ChatPanel } from "./components/ChatPanel";
 import { CanvasPanel } from "./components/CanvasPanel";
 import "./App.css";
 
-// One Y.Doc per stream. Each stream has two fragments:
-//   "chat"   → chronological dialogue
-//   "canvas" → AI-structured notes, mind map data
+// One Y.Doc per stream.
+//   messages (Y.Array) → chronological chat (sender / text / timestamp)
+//   "canvas" (fragment) → AI-structured notes
 const doc = new Y.Doc();
-const chatFragment = doc.getXmlFragment("chat");
+const chatMessages = doc.getArray("messages") as Y.Array<Y.Map<unknown>>;
 const canvasFragment = doc.getXmlFragment("canvas");
 
 function App() {
   return (
     <div className="app-layout">
-      <ChatPanel fragment={chatFragment} />
+      <ChatPanel messages={chatMessages} userName="You" />
       <CanvasPanel fragment={canvasFragment} />
     </div>
   );
