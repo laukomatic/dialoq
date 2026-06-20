@@ -56,6 +56,7 @@ pnpm test                # Not yet configured — add Vitest
 - Tauri commands (`#[tauri::command]`) are the only Rust↔frontend boundary
 
 ## Environment & Gotchas
+- **All commands MUST run from project root**: `pnpm tauri dev`, `pnpm dev`, etc. use CWD — Tauri does not auto-detect the project. Always `cd` to the project root first.
 - **Cargo not in PATH**: After installing Rust, restart the terminal or add `%USERPROFILE%\.cargo\bin` to PATH manually
 - LM Studio must be running and serving before `pnpm tauri dev` (AI features fail gracefully if unreachable)
 - Vite dev server runs on port 1420 (fixed in `vite.config.ts`); Tauri expects this
