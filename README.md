@@ -1,7 +1,15 @@
-# Tauri + React + Typescript
+# Dialoq
 
-This template should help get you started developing with Tauri, React and Typescript in Vite.
+A dialogue-based note-taking application. One continuous BlockNote editor surface serves as both chat and notes. Free-form writing evolves into structured, searchable knowledge via AI-guided dialogue.
 
-## Recommended IDE Setup
+Built with Tauri v2, React, BlockNote, and Yjs CRDT sync (y-sweet).
 
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+## Development
+
+```bash
+pnpm install
+pnpm tauri dev          # Desktop app with hot-reload
+pnpm tauri android dev  # Android (requires SDK setup)
+```
+
+See [AGENTS.md](AGENTS.md) for architecture, conventions, and full command reference.
