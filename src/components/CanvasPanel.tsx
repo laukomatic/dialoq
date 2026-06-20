@@ -90,7 +90,13 @@ function extractElementText(el: Y.XmlElement): string {
 }
 
 function extractPreview(frag: Y.XmlFragment): string {
-  return extractFragmentText(frag).replace(/\s+/g, " ").trim().slice(0, 200);
+  return extractFragmentText(frag)
+    .replace(/<[^>]+>/g, "")       // strip HTML tags
+    .replace(/[*_~`#\[\]]/g, "")   // strip markdown markers
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1") // strip links
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 200);
 }
 
 function computeRelevance(
@@ -406,7 +412,7 @@ export function CanvasPanel({ doc, highlightedNodeIds = [] }: CanvasPanelProps) 
         nodeTypes={nodeTypes}
         connectionMode={ConnectionMode.Loose}
         fitView
-        fitViewOptions={{ padding: 0.3, duration: 600 }}
+        fitViewOptions={{ padding: 0.5, duration: 600 }}
         style={{ background: "transparent" }}
         defaultEdgeOptions={{
           type: "smoothstep",

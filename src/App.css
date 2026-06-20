@@ -112,11 +112,11 @@ html, body, #root {
 
 .chat-floating {
   position: absolute;
-  bottom: 30px;
+  bottom: 40px;
   left: 50%;
   transform: translateX(-50%);
-  width: min(440px, 60vw);
-  max-height: 40vh;
+  width: min(560px, 80vw);
+  max-height: 55vh;
   display: flex;
   flex-direction: column;
   background: rgba(255, 255, 255, 0.55);
