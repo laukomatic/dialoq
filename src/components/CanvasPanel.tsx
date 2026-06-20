@@ -24,37 +24,16 @@ type CanvasPanelProps = {
 type NoteNodeData = { label: string; highlighted?: boolean; tags?: string[] };
 type NoteNode = Node<NoteNodeData>;
 
+const NOTE_EXCLUDE = new Set(["messages", "archived", "tags"]);
+
+function noteFragments(doc: Y.Doc): string[] {
+  return Array.from(doc.share.keys()).filter((k) => !NOTE_EXCLUDE.has(k));
+}
+
 function scanLinks(doc: Y.Doc): Edge[] {
   const edges: Edge[] = [];
   const seen = new Set<string>();
-  const fragments = Array.from(doc.share.keys()).filter(
-    (k) => k !== "messages"
-  );
-
-  const seeds: [string, string][] = [
-    ["inbox", "ideas"],
-    ["inbox", "projects"],
-    ["ideas", "research"],
-    ["ideas", "projects"],
-    ["projects", "project-alpha"],
-    ["projects", "project-beta"],
-    ["research", "learning"],
-    ["research", "project-alpha"],
-    ["research", "ideas"],
-    ["personal", "ideas"],
-    ["meetings", "project-alpha"],
-    ["meetings", "project-beta"],
-    ["learning", "research"],
-  ];
-
-  for (const [source, target] of seeds) {
-    if (!fragments.includes(source) || !fragments.includes(target)) continue;
-    const id = `seed-${source}->${target}`;
-    if (!seen.has(id)) {
-      seen.add(id);
-      edges.push(edge(source, target, id));
-    }
-  }
+  const fragments = noteFragments(doc);
 
   for (const fragName of fragments) {
     try {
@@ -90,11 +69,9 @@ function buildNodes(
   searchQuery = "",
   tagFilter: string | null = null
 ): NoteNode[] {
-  const archived = (doc.getArray("archived") as Y.Array<string>).toArray();
+  const archived = new Set((doc.getArray("archived") as Y.Array<string>).toArray());
   const tagMap = doc.getMap("tags") as Y.Map<string[]>;
-  const fragments = Array.from(doc.share.keys()).filter(
-    (k) => k !== "messages" && !archived.includes(k)
-  );
+  const fragments = noteFragments(doc).filter((k) => !archived.has(k));
 
   const lowerQuery = searchQuery.toLowerCase().trim();
 
@@ -102,54 +79,45 @@ function buildNodes(
   const spacingX = 280;
   const spacingY = 180;
 
-  let idx = 0;
-  return fragments.flatMap((name) => {
+  return fragments.map((name, i) => {
     const tags = tagMap.get(name) || [];
-    const label = name;
-
-    // Apply tag filter
-    if (tagFilter && !tags.includes(tagFilter)) return [];
-
-    // Apply text search
+    const matchesTag = !tagFilter || tags.includes(tagFilter);
     const matchesSearch =
       !lowerQuery ||
       name.toLowerCase().includes(lowerQuery) ||
       tags.some((t) => t.toLowerCase().includes(lowerQuery));
+    const visible = matchesTag && matchesSearch;
 
-    if (searchQuery && !matchesSearch) return [];
-
-    const isHighlighted = highlightedIds.includes(name);
-    const nodeIdx = idx++;
-
-    return [
-      {
-        id: name,
-        position: {
-          x: 100 + (nodeIdx % cols) * spacingX + (Math.floor(nodeIdx / cols) % 2 === 0 ? 0 : 140),
-          y: 80 + Math.floor(nodeIdx / cols) * spacingY,
-        },
-        data: { label, highlighted: isHighlighted, tags },
-        type: "default",
-        style: {
-          background: isHighlighted
-            ? "rgba(60, 120, 240, 0.3)"
-            : "rgba(20, 30, 60, 0.85)",
-          color: "#b8d4f0",
-          border: isHighlighted
-            ? "2px solid rgba(100, 180, 255, 0.8)"
-            : "1px solid rgba(120, 160, 220, 0.3)",
-          borderRadius: 12,
-          padding: "10px 18px",
-          fontSize: 13,
-          fontWeight: 500,
-          boxShadow: isHighlighted
-            ? "0 0 20px rgba(100, 180, 255, 0.4), 0 0 40px rgba(100, 180, 255, 0.15)"
-            : "none",
-          transition: "all 0.4s ease",
-          opacity: searchQuery && !matchesSearch ? 0.15 : 1,
-        },
-      } as NoteNode,
-    ];
+    return {
+      id: name,
+      position: {
+        x: 100 + (i % cols) * spacingX + (Math.floor(i / cols) % 2 === 0 ? 0 : 140),
+        y: 80 + Math.floor(i / cols) * spacingY,
+      },
+      data: { label: name, highlighted: highlightedIds.includes(name), tags },
+      type: "default",
+      draggable: visible,
+      selectable: visible,
+      style: {
+        background: highlightedIds.includes(name)
+          ? "rgba(60, 120, 240, 0.3)"
+          : "rgba(20, 30, 60, 0.85)",
+        color: "#b8d4f0",
+        border: highlightedIds.includes(name)
+          ? "2px solid rgba(100, 180, 255, 0.8)"
+          : "1px solid rgba(120, 160, 220, 0.3)",
+        borderRadius: 12,
+        padding: "10px 18px",
+        fontSize: 13,
+        fontWeight: 500,
+        boxShadow: highlightedIds.includes(name)
+          ? "0 0 20px rgba(100, 180, 255, 0.4), 0 0 40px rgba(100, 180, 255, 0.15)"
+          : "none",
+        transition: "all 0.4s ease",
+        opacity: visible ? 1 : 0.12,
+        pointerEvents: visible ? "auto" : "none" as const,
+      },
+    } as NoteNode;
   });
 }
 

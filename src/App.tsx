@@ -9,12 +9,12 @@ import { StreamBar } from "./components/StreamBar";
 import "./App.css";
 
 const defaultNotes = [
-  "inbox", "ideas", "projects", "project-alpha", "project-beta",
-  "research", "personal", "learning", "meetings",
+  "welcome", "thoughts", "project-ideas", "notes-archive",
+  "reference", "journal", "ai-concepts",
 ];
 
 const AI_NAME = "Dialoq";
-
+const NOTE_EXCLUDE = new Set(["messages", "archived", "tags"]);
 const TS_SLUG_RE = /^\d{4}-\d{2}-\d{2}-\d{4}$/;
 
 function streamSlug(): string {
@@ -36,10 +36,10 @@ function isTimestampSlug(name: string): boolean {
 }
 
 function collectNotesContext(doc: Y.Doc): { context: string; noteIds: string[] } {
-  const archived = (doc.getArray("archived") as Y.Array<string>).toArray();
+  const archived = new Set((doc.getArray("archived") as Y.Array<string>).toArray());
   const tagMap = doc.getMap("tags") as Y.Map<string[]>;
   const ids = Array.from(doc.share.keys()).filter(
-    (k) => k !== "messages" && !archived.includes(k)
+    (k) => !NOTE_EXCLUDE.has(k) && !archived.has(k)
   );
   const parts: string[] = [];
   for (const id of ids) {
@@ -136,6 +136,18 @@ function App() {
     setStreamName(slug);
     setHighlightedNodeIds([]);
   }, []);
+
+  // Ctrl+N for new chat
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "n") {
+        e.preventDefault();
+        createNewChat();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [createNewChat]);
 
   const handleAIChat = useCallback(async (_userText: string) => {
     if (aiBusy.current) return;
@@ -245,11 +257,7 @@ function App() {
 
   return (
     <div className="app-container">
-      <StreamBar
-        streamName={streamName}
-        onNewChat={createNewChat}
-        onSwitchStream={loadStream}
-      />
+      <StreamBar streamName={streamName} />
       <CanvasPanel doc={doc} highlightedNodeIds={highlightedNodeIds} />
       <ChatPanel
         messages={chatMessages}
