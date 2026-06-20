@@ -5,6 +5,10 @@ import { renderWikilinksInHtml } from "../utils/links";
 type ChatPanelProps = {
   messages: Y.Array<Y.Map<unknown>>;
   userName: string;
+  aiName: string;
+  onSendMessage: (text: string) => void;
+  aiStreamingText: string;
+  isAiLoading: boolean;
 };
 
 type MessageData = {
@@ -25,7 +29,7 @@ function formatTime(ts: number): string {
   return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-export function ChatPanel({ messages, userName }: ChatPanelProps) {
+export function ChatPanel({ messages, userName, aiName, onSendMessage, aiStreamingText, isAiLoading }: ChatPanelProps) {
   const [items, setItems] = useState<MessageData[]>([]);
   const [input, setInput] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
@@ -39,7 +43,7 @@ export function ChatPanel({ messages, userName }: ChatPanelProps) {
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [items.length]);
+  }, [items.length, aiStreamingText, isAiLoading]);
 
   const send = useCallback(() => {
     const text = input.trim();
@@ -50,7 +54,8 @@ export function ChatPanel({ messages, userName }: ChatPanelProps) {
     msg.set("timestamp", Date.now());
     messages.push([msg]);
     setInput("");
-  }, [input, messages, userName]);
+    onSendMessage(text);
+  }, [input, messages, userName, onSendMessage]);
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -62,7 +67,7 @@ export function ChatPanel({ messages, userName }: ChatPanelProps) {
   return (
     <div className="chat-floating">
       <div className="chat-messages">
-        {items.length === 0 && (
+        {items.length === 0 && !isAiLoading && (
           <div className="chat-empty">Start the conversation.</div>
         )}
         {items.map((msg, i) => (
@@ -84,6 +89,27 @@ export function ChatPanel({ messages, userName }: ChatPanelProps) {
             />
           </div>
         ))}
+
+        {isAiLoading && aiStreamingText && (
+          <div className="chat-bubble chat-bubble--ai">
+            <div className="chat-bubble__meta">
+              <span className="chat-bubble__sender">{aiName}</span>
+              <span className="chat-bubble__time">now</span>
+            </div>
+            <div className="chat-bubble__text">{aiStreamingText}</div>
+          </div>
+        )}
+
+        {isAiLoading && !aiStreamingText && (
+          <div className="chat-bubble chat-bubble--ai">
+            <div className="chat-bubble__meta">
+              <span className="chat-bubble__sender">{aiName}</span>
+              <span className="chat-bubble__time">now</span>
+            </div>
+            <div className="chat-bubble__text chat-thinking">Thinking...</div>
+          </div>
+        )}
+
         <div ref={endRef} />
       </div>
 
@@ -95,8 +121,9 @@ export function ChatPanel({ messages, userName }: ChatPanelProps) {
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={onKeyDown}
           rows={2}
+          disabled={isAiLoading}
         />
-        <button className="chat-send-btn" onClick={send}>
+        <button className="chat-send-btn" onClick={send} disabled={isAiLoading}>
           Send
         </button>
       </div>

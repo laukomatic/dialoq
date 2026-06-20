@@ -8,12 +8,16 @@ type StreamBarProps = {
 };
 
 function fmtStreamName(slug: string): string {
-  // "2026-06-20-1530" → "Jun 20, 15:30"
-  const parts = slug.split("-");
-  if (parts.length >= 4) {
-    const [, m, d, hh, mm] = parts;
+  // timestamp slugs: "2026-06-20-1739" → "Jun 20, 17:39"
+  const TS = /^\d{4}-\d{2}-\d{2}-\d{4}$/;
+  if (TS.test(slug)) {
+    const parts = slug.split("-");
+    const [, m, d, time] = parts;
+    const hh = time.slice(0, 2);
+    const mm = time.slice(2);
     return `${months[parseInt(m) - 1] ?? m} ${parseInt(d)}, ${hh}:${mm}`;
   }
+  // custom title — return as-is
   return slug;
 }
 

@@ -14,8 +14,13 @@ Dialogue-based note-taking. Custom floating chat + full-screen ReactFlow graph c
 
 ## Architecture
 ```
-src-tauri/    Rust backend — stream file I/O (save/load/list), Yjs persistence
-src/          React frontend — streaming chat + graph canvas
+src-tauri/
+  src/
+    lib.rs    — Tauri commands (save/load/list streams, chat_complete_stream)
+    ai.rs     — OpenAI-compatible API client (SSE streaming, tool calls)
+    agent.rs  — AI agent logic (tool definitions, system prompt, response parser)
+    main.rs   — Binary entry
+src/
   components/
     ChatPanel.tsx     — custom chat UI (textarea input, Yjs-backed message bubbles)
     CanvasPanel.tsx   — ReactFlow full-screen graph + floating BlockNote editor
@@ -27,8 +32,48 @@ src/          React frontend — streaming chat + graph canvas
 - **Canvas panel**: Full-screen ReactFlow graph (dark space-themed). Nodes = Y.Doc fragments. Edges = seed relationships + wikilinks. Click node → floating BlockNote editor opens centered. Nodes/edges auto-update from fragment changes and `[[wikilinks]]`.
 - **Wikilinks**: `[[note-id|Title]]` syntax (Obsidian/Logseq standard). Regex parser in `src/utils/links.ts`. Link scanner extracts from all Y.Doc fragments to build graph edges. Rendered as blue pills in chat messages.
 - **Stream lifecycle**: Every launch = fresh empty stream (timestamp slug `YYYY-MM-DD-HHmm`). `+ New` creates fresh. `Search` opens modal to list/switch past streams. Auto-saves on every Y.Doc change (1s debounce) via Tauri IPC.
-- **Persistence**: Three Rust Tauri commands: `save_stream(name, Vec<u8>)`, `load_stream(name) -> Vec<u8>`, `list_streams() -> Vec<String>`. Files at `~/.dialoq/streams/{name}.ydoc` (platform app-data dir). Binary Yjs update format.
+- **Persistence**: Three Rust Tauri commands: `save_stream(name, Vec<u8>)`, `load_stream(name) -> Vec<u8>`, `list_streams() -> Vec<String>`. Files at `%APPDATA%/com.matic.dialoq/streams/{name}.ydoc` (platform app-data dir). Binary Yjs update format.
 - One Y.Doc per stream with multiple named fragments (one per note) + Y.Array for chat messages.
+
+## AI Agent System
+
+### Flow
+1. User sends message → ChatPanel calls `onSendMessage(text)`
+2. App.tsx `handleAIChat`:
+   a. Collects notes context (fragment names + content previews)
+   b. Builds conversation history from Y.Array
+   c. Calls `invoke("chat_complete_stream", { messages, notesContext, knownNoteIds })`
+3. Rust `chat_complete_stream` command:
+   a. Prepends system prompt (with tool definitions) to messages
+   b. Calls `ai::stream_chat()` → SSE request to LM Studio / OpenCode API
+   c. Streams content tokens to frontend via `ai:token` Tauri events
+   d. Parses response (function calls or text-based commands)
+   e. Returns `AgentResponse { chat_html, actions, read_note_ids }`
+4. Frontend:
+   a. Listens to `ai:token` events for progressive display
+   b. Applies `actions` (CreateNote, UpdateNote) to Y.Doc fragments
+   c. Adds AI chat message to Y.Array
+   d. Highlights `read_note_ids` nodes on ReactFlow canvas (2s glow)
+
+### AI Backend (`src-tauri/src/ai.rs`)
+- `AiConfig`: `api_url` (default `http://localhost:1234/v1`), `model`, `api_key`
+- `stream_chat()`: SSE streaming with `reqwest`, emits `ai:token` events, accumulates `tool_calls`
+- `chat_completion()`: Non-streaming fallback
+- Supports OpenAI function calling (`tools` parameter)
+
+### Agent Logic (`src-tauri/src/agent.rs`)
+- **Tool definitions**: `create_note(note_id, title, content)`, `update_note(note_id, content)`
+- **System prompt**: Informs AI about current notes, tools, and rules (always confirm actions)
+- **Hybrid parser**: Tries function calling first, falls back to text-based `[CREATE: id]` / `[UPDATE: id]` parsing
+- Returns `AgentResponse { chat_html, actions: Vec<AgentAction>, read_note_ids }`
+
+### Tools defined
+- `create_note(note_id, title, content)` — new Y.XmlFragment node on canvas
+- `update_note(note_id, content)` — overwrites existing note content
+
+### Node highlight
+- When AI responds, `read_note_ids` are sent to `CanvasPanel`
+- Affected nodes get a blue glow + border animation (2s, auto-clears)
 
 ## Commands
 

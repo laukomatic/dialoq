@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import {
   ReactFlow,
   Controls,
@@ -18,9 +18,10 @@ import "@blocknote/mantine/style.css";
 
 type CanvasPanelProps = {
   doc: Y.Doc;
+  highlightedNodeIds?: string[];
 };
 
-type NoteNodeData = { label: string };
+type NoteNodeData = { label: string; highlighted?: boolean; tags?: string[] };
 type NoteNode = Node<NoteNodeData>;
 
 function scanLinks(doc: Y.Doc): Edge[] {
@@ -30,7 +31,6 @@ function scanLinks(doc: Y.Doc): Edge[] {
     (k) => k !== "messages"
   );
 
-  // Seed edges — show relationships between sample notes.
   const seeds: [string, string][] = [
     ["inbox", "ideas"],
     ["inbox", "projects"],
@@ -56,7 +56,6 @@ function scanLinks(doc: Y.Doc): Edge[] {
     }
   }
 
-  // Dynamic edges from [[wikilinks]] in fragment content.
   for (const fragName of fragments) {
     try {
       const frag = doc.getXmlFragment(fragName);
@@ -85,43 +84,104 @@ function edge(source: string, target: string, id: string): Edge {
   };
 }
 
-function buildNodes(doc: Y.Doc): NoteNode[] {
+function buildNodes(
+  doc: Y.Doc,
+  highlightedIds: string[] = [],
+  searchQuery = "",
+  tagFilter: string | null = null
+): NoteNode[] {
+  const archived = (doc.getArray("archived") as Y.Array<string>).toArray();
+  const tagMap = doc.getMap("tags") as Y.Map<string[]>;
   const fragments = Array.from(doc.share.keys()).filter(
-    (k) => k !== "messages"
+    (k) => k !== "messages" && !archived.includes(k)
   );
-  // Spread nodes in a wider, more organic pattern.
+
+  const lowerQuery = searchQuery.toLowerCase().trim();
+
   const cols = 4;
   const spacingX = 280;
   const spacingY = 180;
-  return fragments.map((name, i) => ({
-    id: name,
-    position: {
-      x: 100 + (i % cols) * spacingX + (Math.floor(i / cols) % 2 === 0 ? 0 : 140),
-      y: 80 + Math.floor(i / cols) * spacingY,
-    },
-    data: { label: name },
-    type: "default",
-    style: {
-      background: "rgba(20, 30, 60, 0.85)",
-      color: "#b8d4f0",
-      border: "1px solid rgba(120, 160, 220, 0.3)",
-      borderRadius: 12,
-      padding: "10px 18px",
-      fontSize: 13,
-      fontWeight: 500,
-    },
-  }));
+
+  let idx = 0;
+  return fragments.flatMap((name) => {
+    const tags = tagMap.get(name) || [];
+    const label = name;
+
+    // Apply tag filter
+    if (tagFilter && !tags.includes(tagFilter)) return [];
+
+    // Apply text search
+    const matchesSearch =
+      !lowerQuery ||
+      name.toLowerCase().includes(lowerQuery) ||
+      tags.some((t) => t.toLowerCase().includes(lowerQuery));
+
+    if (searchQuery && !matchesSearch) return [];
+
+    const isHighlighted = highlightedIds.includes(name);
+    const nodeIdx = idx++;
+
+    return [
+      {
+        id: name,
+        position: {
+          x: 100 + (nodeIdx % cols) * spacingX + (Math.floor(nodeIdx / cols) % 2 === 0 ? 0 : 140),
+          y: 80 + Math.floor(nodeIdx / cols) * spacingY,
+        },
+        data: { label, highlighted: isHighlighted, tags },
+        type: "default",
+        style: {
+          background: isHighlighted
+            ? "rgba(60, 120, 240, 0.3)"
+            : "rgba(20, 30, 60, 0.85)",
+          color: "#b8d4f0",
+          border: isHighlighted
+            ? "2px solid rgba(100, 180, 255, 0.8)"
+            : "1px solid rgba(120, 160, 220, 0.3)",
+          borderRadius: 12,
+          padding: "10px 18px",
+          fontSize: 13,
+          fontWeight: 500,
+          boxShadow: isHighlighted
+            ? "0 0 20px rgba(100, 180, 255, 0.4), 0 0 40px rgba(100, 180, 255, 0.15)"
+            : "none",
+          transition: "all 0.4s ease",
+          opacity: searchQuery && !matchesSearch ? 0.15 : 1,
+        },
+      } as NoteNode,
+    ];
+  });
 }
 
-export function CanvasPanel({ doc }: CanvasPanelProps) {
-  const [nodes, setNodes, onNodesChange] = useNodesState<NoteNode>(buildNodes(doc));
-  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+function collectUniqueTags(doc: Y.Doc): string[] {
+  const tagMap = doc.getMap("tags") as Y.Map<string[]>;
+  const all = new Set<string>();
+  for (const [, tags] of tagMap) {
+    if (Array.isArray(tags)) tags.forEach((t) => all.add(t));
+  }
+  return Array.from(all).sort();
+}
+
+export function CanvasPanel({ doc, highlightedNodeIds = [] }: CanvasPanelProps) {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
 
-  // Update nodes when fragments change.
+  const allTags = useMemo(() => collectUniqueTags(doc), [doc]);
+
+  const [nodes, setNodes, onNodesChange] = useNodesState<NoteNode>(
+    buildNodes(doc, highlightedNodeIds, searchQuery, tagFilter)
+  );
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+
+  const refreshNodes = useCallback(() => {
+    setNodes(buildNodes(doc, highlightedNodeIds, searchQuery, tagFilter));
+  }, [doc, highlightedNodeIds, searchQuery, tagFilter, setNodes]);
+
+  useEffect(() => { refreshNodes(); }, [refreshNodes]);
+
   useEffect(() => {
-    const update = () => setNodes(buildNodes(doc));
-    update();
+    const update = () => refreshNodes();
     const unsubs: (() => void)[] = [];
     for (const name of doc.share.keys()) {
       try {
@@ -132,10 +192,13 @@ export function CanvasPanel({ doc }: CanvasPanelProps) {
     }
     doc.getArray("messages").observeDeep(update);
     unsubs.push(() => doc.getArray("messages").unobserveDeep(update));
+    doc.getMap("tags").observeDeep(update);
+    unsubs.push(() => doc.getMap("tags").unobserveDeep(update));
+    doc.getArray("archived").observeDeep(update);
+    unsubs.push(() => doc.getArray("archived").unobserveDeep(update));
     return () => unsubs.forEach((f) => f());
-  }, [doc, setNodes]);
+  }, [doc, refreshNodes]);
 
-  // Update edges from wikilinks.
   useEffect(() => {
     const update = () => setEdges(scanLinks(doc));
     update();
@@ -171,9 +234,24 @@ export function CanvasPanel({ doc }: CanvasPanelProps) {
       <div className="canvas-search-float">
         <input
           className="canvas-search-float-input"
-          placeholder="Search all notes..."
-          disabled
+          placeholder="Search notes..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
         />
+        {allTags.length > 0 && (
+          <div className="canvas-tag-bar">
+            <span className="canvas-tag-label">Tags:</span>
+            {allTags.map((tag) => (
+              <button
+                key={tag}
+                className={`canvas-tag-pill ${tagFilter === tag ? "canvas-tag-pill--active" : ""}`}
+                onClick={() => setTagFilter(tagFilter === tag ? null : tag)}
+              >
+                {tag}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <ReactFlow
