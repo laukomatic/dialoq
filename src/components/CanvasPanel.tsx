@@ -124,6 +124,14 @@ export function CanvasPanel({ doc }: CanvasPanelProps) {
 
   return (
     <div className="canvas-fullscreen">
+      <div className="canvas-search-float">
+        <input
+          className="canvas-search-float-input"
+          placeholder="Search all notes..."
+          disabled
+        />
+      </div>
+
       <ReactFlow
         nodes={nodes}
         edges={edges}

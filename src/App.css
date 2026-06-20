@@ -25,6 +25,38 @@ html, body, #root {
   inset: 0;
 }
 
+/* ---- floating search bar ---- */
+
+.canvas-search-float {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  width: min(360px, 60vw);
+}
+
+.canvas-search-float-input {
+  width: 100%;
+  padding: 8px 16px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 10px;
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
+}
+
+.canvas-search-float-input:focus {
+  background: #fff;
+  border-color: #4dabf7;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
 /* ---- floating chat ---- */
 
 .chat-floating {
@@ -76,7 +108,7 @@ html, body, #root {
 
 .chat-bubble--user {
   align-self: flex-end;
-  background: #e3f2fd;
+  background: #d0e6ff;
   border-bottom-right-radius: 3px;
 }
 
@@ -251,7 +283,7 @@ html, body, #root {
   }
 
   .chat-bubble--user {
-    background: #1a3550;
+    background: #1a3a5a;
   }
 
   .chat-bubble--ai {
@@ -305,5 +337,17 @@ html, body, #root {
   .floating-editor-close:hover {
     background: #333;
     color: #ccc;
+  }
+
+  .canvas-search-float-input {
+    background: rgba(30, 30, 30, 0.85);
+    border-color: rgba(255, 255, 255, 0.1);
+    color: #eee;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+  }
+
+  .canvas-search-float-input:focus {
+    background: #222;
+    border-color: #4dabf7;
   }
 }
