@@ -170,6 +170,7 @@ export function CanvasPanel({ doc, highlightedNodeIds = [] }: CanvasPanelProps) 
 
   const [searchQuery, setSearchQuery] = useState("");
   const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const [showDropdown, setShowDropdown] = useState(false);
 
   const allTags = useMemo(() => {
     const tagMap = doc.getMap("tags") as Y.Map<string[]>;
@@ -181,6 +182,34 @@ export function CanvasPanel({ doc, highlightedNodeIds = [] }: CanvasPanelProps) 
   }, [doc]);
 
   // Keyboard shortcut: Ctrl+K / Cmd+K to focus search
+  // Dropdown items — all non-archived notes with names, filterable by query
+  const dropdownItems = useMemo(() => {
+    const archived = new Set((doc.getArray("archived") as Y.Array<string>).toArray());
+    const all = noteFragments(doc).filter((k) => !archived.has(k));
+    const q = searchQuery.toLowerCase().trim();
+    return all
+      .filter((id) => !q || id.toLowerCase().includes(q))
+      .map((id) => {
+        const edgeCount = edges.filter((e) => e.source === id || e.target === id).length;
+        return { id, connections: edgeCount };
+      });
+  }, [doc, searchQuery, edges]);
+
+  const closeDropdown = useCallback(() => {
+    setShowDropdown(false);
+    setSearchQuery("");
+    setTagFilter(null);
+  }, []);
+
+  const pickDropdownItem = useCallback(
+    (id: string) => {
+      setFocusId(id);
+      setSelectedNode(id);
+      closeDropdown();
+    },
+    [closeDropdown]
+  );
+
   const searchRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -314,8 +343,16 @@ export function CanvasPanel({ doc, highlightedNodeIds = [] }: CanvasPanelProps) 
         <input
           ref={searchRef}
           className="canvas-search-float-input"
-          placeholder={tagFilter ? `Filtered by: #${tagFilter}` : "Search notes or #tag..."}
+          placeholder="Search notes..."
           value={searchQuery}
+          onFocus={() => setShowDropdown(true)}
+          onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") closeDropdown();
+            if (e.key === "Enter" && dropdownItems.length > 0) {
+              pickDropdownItem(dropdownItems[0].id);
+            }
+          }}
           onChange={(e) => {
             const val = e.target.value;
             if (val.startsWith("#")) {
@@ -327,6 +364,24 @@ export function CanvasPanel({ doc, highlightedNodeIds = [] }: CanvasPanelProps) 
             }
           }}
         />
+        {showDropdown && dropdownItems.length > 0 && (
+          <div className="search-dropdown">
+            {dropdownItems.map((item) => (
+              <div
+                key={item.id}
+                className="search-dropdown-item"
+                onMouseDown={() => pickDropdownItem(item.id)}
+              >
+                <span className="search-dropdown-item__name">{item.id}</span>
+                {item.connections > 0 && (
+                  <span className="search-dropdown-item__meta">
+                    {item.connections} link{item.connections !== 1 ? "s" : ""}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
         {allTags.length > 0 && (
           <div className="canvas-tag-bar">
             {allTags.map((tag) => (

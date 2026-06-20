@@ -5,7 +5,6 @@ import { listen } from "@tauri-apps/api/event";
 import "@blocknote/core/fonts/inter.css";
 import { ChatPanel } from "./components/ChatPanel";
 import { CanvasPanel } from "./components/CanvasPanel";
-import { StreamBar } from "./components/StreamBar";
 import { digitalMindNotes } from "./assets/digitalMindNotes";
 import "./App.css";
 
@@ -261,7 +260,6 @@ function App() {
 
   return (
     <div className="app-container">
-      <StreamBar />
       <CanvasPanel doc={doc} highlightedNodeIds={highlightedNodeIds} />
       <ChatPanel
         messages={chatMessages}

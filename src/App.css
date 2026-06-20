@@ -20,29 +20,51 @@ html, body, #root {
   flex-direction: column;
 }
 
-/* ---- stream bar ---- */
-
-.stream-bar {
-  display: flex;
-  align-items: center;
-  padding: 6px 14px;
-  background: rgba(10, 15, 30, 0.7);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border-bottom: 1px solid rgba(120, 160, 220, 0.12);
-  z-index: 300;
-  flex-shrink: 0;
-}
-
-.stream-bar-title {
-  font-size: 13px;
-  font-weight: 500;
-  color: rgba(200, 220, 255, 0.85);
-}
-
 /* ---- hide default connection handles ---- */
 
 .react-flow__handle { display: none !important; }
+
+/* ---- search dropdown ---- */
+
+.search-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  max-height: 320px;
+  overflow-y: auto;
+  background: rgba(16, 24, 44, 0.96);
+  border: 1px solid rgba(120, 160, 220, 0.15);
+  border-radius: 8px;
+  margin-top: 4px;
+  z-index: 50;
+  backdrop-filter: blur(8px);
+}
+
+.search-dropdown-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 12px;
+  cursor: pointer;
+  color: rgba(200, 220, 255, 0.8);
+  font-size: 13px;
+  transition: background 0.1s;
+}
+
+.search-dropdown-item:hover {
+  background: rgba(100, 180, 255, 0.12);
+  color: #fff;
+}
+
+.search-dropdown-item__name {
+  font-weight: 500;
+}
+
+.search-dropdown-item__meta {
+  font-size: 10px;
+  color: rgba(136, 180, 230, 0.4);
+}
 
 /* ---- fullscreen canvas ---- */
 
@@ -90,19 +112,19 @@ html, body, #root {
 
 .chat-floating {
   position: absolute;
-  top: 35%;
+  bottom: 30px;
   left: 50%;
-  transform: translate(-50%, -50%);
-  width: min(500px, 70vw);
-  max-height: 50vh;
+  transform: translateX(-50%);
+  width: min(440px, 60vw);
+  max-height: 40vh;
   display: flex;
   flex-direction: column;
-  background: rgba(255, 255, 255, 0.88);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(0, 0, 0, 0.06);
   border-radius: 14px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
   z-index: 100;
   overflow: hidden;
 }
@@ -460,9 +482,9 @@ html, body, #root {
 
 @media (prefers-color-scheme: dark) {
   .chat-floating {
-    background: rgba(30, 30, 30, 0.9);
-    border-color: rgba(255, 255, 255, 0.08);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    background: rgba(25, 25, 35, 0.55);
+    border-color: rgba(255, 255, 255, 0.06);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
   }
 
   .chat-bubble--user {
