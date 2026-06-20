@@ -1,141 +1,126 @@
 # Dialoq — Agent Instructions
 
-## Vision
-Dialogue-based note-taking. Custom floating chat + full-screen ReactFlow graph canvas. Free-form conversation → AI structures notes on the spatial canvas. Each chat stream is a self-contained Y.Doc (messages + note graph).
+Dialogue-based note-taking. Floating chat + full-screen ReactFlow graph canvas. Conversation → AI structures notes on a spatial canvas. Each stream is a self-contained Y.Doc (messages + note graph).
 
 ## Stack
-- **Desktop/Mobile**: Tauri v2 (Rust backend, React/TypeScript frontend)
-- **Editor**: BlockNote (`@blocknote/core` + `@blocknote/react` + `@blocknote/mantine`) — block-based rich text for notes
-- **Graph canvas**: ReactFlow (`@xyflow/react`) — 2D spatial graph, nodes = notes, edges = wikilinks
-- **Sync**: Yjs CRDT (`yjs` + `@y-sweet/client` for transport)
-- **Rust Yjs**: `yrs` crate for CRDT persistence and sync coordination in the backend
-- **AI**: LM Studio local API (`http://localhost:1234/v1`) primary; OpenCode API as cloud fallback
+
+- **Desktop**: Tauri v2 (Rust backend, React/TypeScript frontend)
+- **Editor**: `@blocknote/mantine` `BlockNoteView` backed by Y.XmlFragment collaboration
+- **Graph**: `@xyflow/react` ReactFlow — 2D spatial graph with custom note nodes
+- **Layout**: `d3-force` force-directed layout — clusters linked notes together
+- **Data**: Yjs CRDT (`yjs`) — one Y.Doc per stream
+- **AI**: LM Studio local API (`http://localhost:1234/v1`) — OpenAI-compatible SSE with function calling
 - **Package manager**: pnpm
 
 ## Architecture
+
 ```
-src-tauri/
-  src/
-    lib.rs    — Tauri commands (save/load/list streams, chat_complete_stream)
-    ai.rs     — OpenAI-compatible API client (SSE streaming, tool calls)
-    agent.rs  — AI agent logic (tool definitions, system prompt, response parser)
-    main.rs   — Binary entry
+src-tauri/src/
+  lib.rs     — Tauri commands (save/load/list streams, chat_complete_stream)
+  ai.rs      — OpenAI-compatible HTTP client (SSE streaming, tool calls, SSE→Tauri events)
+  agent.rs   — tool definitions, system prompt builder, hybrid response parser
+  main.rs    — #[cfg_attr(not(debug_assertions), windows_subsystem = "windows")] entry
 src/
+  App.tsx               — Y.Doc state, auto-save (1s debounce), handleAIChat, Ctrl+N
   components/
-    ChatPanel.tsx     — custom chat UI (textarea input, Yjs-backed message bubbles)
-    CanvasPanel.tsx   — ReactFlow full-screen graph + floating BlockNote editor
-    StreamBar.tsx     — top bar (stream title, new chat, search/switch streams)
+    ChatPanel.tsx       — textarea input, Y.Array messages, streaming AI display
+    CanvasPanel.tsx     — ReactFlow graph, NoteNode, d3 layout, search dropdown, Ctrl+K
+    NoteNode.tsx        — custom node: shows content preview, smart expand by relevance
+    StreamBar.tsx       — returns null (no top bar)
   utils/
-    links.ts          — [[wikilink]] parser and HTML renderer
+    links.ts            — [[wikilink]] regex parser + HTML pill renderer
+    layout.ts           — d3-force simulation → positioned nodes for ReactFlow
+  assets/
+    digitalMindNotes.ts — 20 seed notes from Obsidian vault (used in createDocWithDefaults)
 ```
-- **Chat panel**: Yjs-backed messages (Y.Array<Y.Map<{sender, html, timestamp}>). Textarea input, Enter to send. Messages stored as HTML, rendered with wikilink pill styling. Floating semi-transparent window at bottom center — no BlockNote in chat area.
-- **Canvas panel**: Full-screen ReactFlow graph (dark space-themed). Nodes = Y.Doc fragments. Edges = seed relationships + wikilinks. Click node → floating BlockNote editor opens centered. Nodes/edges auto-update from fragment changes and `[[wikilinks]]`.
-- **Wikilinks**: `[[note-id|Title]]` syntax (Obsidian/Logseq standard). Regex parser in `src/utils/links.ts`. Link scanner extracts from all Y.Doc fragments to build graph edges. Rendered as blue pills in chat messages.
-- **Stream lifecycle**: Every launch = fresh empty stream (timestamp slug `YYYY-MM-DD-HHmm`). `+ New` creates fresh. `Search` opens modal to list/switch past streams. Auto-saves on every Y.Doc change (1s debounce) via Tauri IPC.
-- **Persistence**: Three Rust Tauri commands: `save_stream(name, Vec<u8>)`, `load_stream(name) -> Vec<u8>`, `list_streams() -> Vec<String>`. Files at `%APPDATA%/com.matic.dialoq/streams/{name}.ydoc` (platform app-data dir). Binary Yjs update format.
-- One Y.Doc per stream with multiple named fragments (one per note) + Y.Array for chat messages.
 
-## AI Agent System
+### Data model
 
-### Flow
-1. User sends message → ChatPanel calls `onSendMessage(text)`
-2. App.tsx `handleAIChat`:
-   a. Collects notes context (fragment names + content previews)
-   b. Builds conversation history from Y.Array
-   c. Calls `invoke("chat_complete_stream", { messages, notesContext, knownNoteIds })`
-3. Rust `chat_complete_stream` command:
-   a. Prepends system prompt (with tool definitions) to messages
-   b. Calls `ai::stream_chat()` → SSE request to LM Studio / OpenCode API
-   c. Streams content tokens to frontend via `ai:token` Tauri events
-   d. Parses response (function calls or text-based commands)
-   e. Returns `AgentResponse { chat_html, actions, read_note_ids }`
+One Y.Doc per stream with:
+- `Y.Array` `"messages"` — entries `{ sender, html, timestamp }`
+- `Y.XmlFragment` per note — BlockNote-editable rich text, one per note ID
+- `Y.Array` `"archived"` — note IDs hidden from graph and AI context
+- `Y.Map` `"tags"` — maps note ID to `string[]` (max 5 tags per note)
+
+### Persistence
+
+Rust commands at `src-tauri/src/lib.rs`:
+- `save_stream(name, data: Vec<u8>)` — binary Yjs update at `%APPDATA%/com.matic.dialoq/streams/{name}.ydoc`
+- `load_stream(name) -> Vec<u8>`
+- `list_streams() -> Vec<String>` — newest first
+
+Lib crate named `dialoq_lib` (required on Windows to avoid bin name conflict `dialoq.exe`).
+
+### AI agent flow
+
+1. User types → `ChatPanel.send()` pushes `{ sender: "You", html: text, timestamp }` to Y.Array → calls `onSendMessage`
+2. `App.tsx handleAIChat`:
+   - Collects non-archived notes context (`collectNotesContext`) from Y.XmlFragments
+   - Calls `invoke("chat_complete_stream", { messages, notesContext, knownNoteIds, suggestTitle })`
+3. Rust `chat_complete_stream`:
+   - Prepends system prompt (`agent.rs system_prompt()`) with tool definitions
+   - Calls `ai::stream_chat()` → SSE POST to LM Studio `/v1/chat/completions`
+   - Emits each content token as `ai:token` Tauri event (frontend displays progressively)
+   - Accumulates `tool_calls` (function calling), falls back to text `[CREATE: id]`/`[UPDATE: id]`
+   - Returns `AgentResponse { chat_html, actions, read_note_ids, suggested_title }`
 4. Frontend:
-   a. Listens to `ai:token` events for progressive display
-   b. Applies `actions` (CreateNote, UpdateNote) to Y.Doc fragments
-   c. Adds AI chat message to Y.Array
-   d. Highlights `read_note_ids` nodes on ReactFlow canvas (2s glow)
+   - Applies actions to Y.Doc: `CreateNote` (with optional tags), `UpdateNote`, `ArchiveNote`, `TagNote`
+   - If `suggested_title` is set, updates stream name (replaces timestamp slug)
+   - Adds AI message `{ sender: "Dialoq", html, timestamp }` to Y.Array
+   - Highlights `read_note_ids` on graph (2s blue glow)
 
-### AI Backend (`src-tauri/src/ai.rs`)
-- `AiConfig`: `api_url` (default `http://localhost:1234/v1`), `model`, `api_key`
-- `stream_chat()`: SSE streaming with `reqwest`, emits `ai:token` events, accumulates `tool_calls`
-- `chat_completion()`: Non-streaming fallback
-- Supports OpenAI function calling (`tools` parameter)
+### AI tools defined (`agent.rs`)
 
-### Agent Logic (`src-tauri/src/agent.rs`)
-- **Tool definitions**: `create_note(note_id, title, content)`, `update_note(note_id, content)`
-- **System prompt**: Informs AI about current notes, tools, and rules (always confirm actions)
-- **Hybrid parser**: Tries function calling first, falls back to text-based `[CREATE: id]` / `[UPDATE: id]` parsing
-- Returns `AgentResponse { chat_html, actions: Vec<AgentAction>, read_note_ids }`
+| Tool | Parameters | Effect |
+|------|-----------|--------|
+| `create_note` | `note_id`, `title`, `content?`, `tags?` (max 5) | New Y.XmlFragment node |
+| `update_note` | `note_id`, `content` | Overwrites fragment content |
+| `archive_note` | `note_id` | Adds to archived array, hidden from graph/context |
+| `tag_note` | `note_id`, `tags` (max 5) | Sets tags on note in Y.Map |
 
-### Tools defined
-- `create_note(note_id, title, content)` — new Y.XmlFragment node on canvas
-- `update_note(note_id, content)` — overwrites existing note content
+Hybrid parser: tries OpenAI function calling first. If no `tool_calls` in response, falls back to parsing `[CREATE: id]`, `[UPDATE: id]`, `[ARCHIVE: id]`, `[TAG: id]tags[/TAG]`, `[TITLE: ...]` from text.
 
-### Node highlight
-- When AI responds, `read_note_ids` are sent to `CanvasPanel`
-- Affected nodes get a blue glow + border animation (2s, auto-clears)
+### AI config
+
+Defaults in `ai.rs`:
+- `api_url: "http://localhost:1234/v1"`
+- `model: "google/gemma-4-e4b"` (swap to `google/gemma-4-31b-qat` for larger model)
+- `api_key: None`
+
+To change model, edit `src-tauri/src/ai.rs:17`.
 
 ## Commands
 
-### Prerequisites (Windows)
-- Rust + Cargo (installed via rustup.rs — ensure `~/.cargo/bin` is in PATH)
-- Node.js LTS + pnpm (`npm install -g pnpm`)
-- Tauri CLI: `cargo install tauri-cli --version "^2.0"`
-- Android: Android Studio + SDK 34+ + NDK 26+, then `pnpm tauri android init`
+All commands must run from project root.
 
-### Development
 ```bash
-pnpm tauri dev           # Full app (Rust + frontend hot-reload)
-pnpm dev                 # Frontend-only Vite server (port 1420)
-pnpm tauri android dev   # Android (requires SDK setup)
+pnpm tauri dev          # Full app (Rust + Vite hot-reload)
+pnpm dev                # Frontend-only Vite on port 1420
+pnpm tauri build        # Production build
+pnpm typecheck          # tsc --noEmit (strict, noUnusedLocals, noUnusedParameters)
+cargo clippy            # Rust lint (no ESLint configured)
 ```
 
-### Build
-```bash
-pnpm tauri build         # Production desktop build
-```
+Quality order: `pnpm typecheck` → `cargo clippy` → `cargo test` (no frontend tests yet).
 
-### Quality (run in this order)
-```bash
-pnpm typecheck           # tsc --noEmit (frontend)
-pnpm lint                # Not yet configured — add ESLint
-cargo clippy             # Rust lint
-cargo test               # Rust unit tests
-pnpm test                # Not yet configured — add Vitest
-```
+## Key conventions
 
-## Key Conventions
-- AI prompt templates and model configs live in `src-tauri/`, not the frontend
-- AI_API_URL reads from env/config, never hardcoded — defaults to `http://localhost:1234/v1` (LM Studio) with fallback to OpenCode API
-- All editor state is Yjs-native; BlockNote's built-in Yjs binding is the sole state management
-- Tauri commands (`#[tauri::command]`) are the only Rust↔frontend boundary
-- Chat panel uses plain textarea, NOT BlockNote — block-level formatting (headings, lists) is intentionally excluded from chat
+- Chat input is plain textarea — no BlockNote in chat area
+- Note content is Y.XmlFragment-backed BlockNote; the `@blocknote/mantine` `BlockNoteView` (not `@blocknote/react` `BlockNoteViewRaw`)
+- Tauri commands are the only Rust↔frontend boundary (`#[tauri::command]`)
+- Saving notes as text previews: use `extractFragmentText()` which recursively walks Y.XmlFragment tree extracting `Y.XmlText` nodes (not `frag.toString()` which returns Yjs XML)
+- Search: `Ctrl+K` focuses search, list shows all note names with connection counts, clicking pans to node
+- New chat: `Ctrl+N`
+- Graph layout: `d3-force` runs 150 ticks on node/edge changes, positions normalize to viewport
+- Relevance/focus: clicking a node sets `focusId`; focused node + neighbors show content, distant notes dim to title-only
+- All styling in `App.css` (no CSS modules)
 
-## Environment & Gotchas
-- **All commands MUST run from project root**: `pnpm tauri dev`, `pnpm dev`, etc. use CWD — Tauri does not auto-detect the project. Always `cd` to the project root first.
-- **Cargo not in PATH**: After installing Rust, restart the terminal or add `%USERPROFILE%\.cargo\bin` to PATH manually
-- LM Studio must be running and serving before `pnpm tauri dev` (AI features fail gracefully if unreachable)
-- Vite dev server runs on port 1420 (fixed in `vite.config.ts`); Tauri expects this
-- Tauri v2 android requires `ANDROID_HOME` set and NDK 26+ — verify with `pnpm tauri android init`
-- `y-sweet` needs a sync server URL; set via env `SWEET_SERVER_URL` (use local `y-sweet` for dev: `npx y-sweet serve`)
-- `src-tauri/src/lib.rs` uses `dialoq_lib` as the lib name (required on Windows to avoid name conflict with the binary `dialoq.exe`)
-- BlockNote editor uses `@blocknote/mantine` `BlockNoteView`, NOT `@blocknote/react` `BlockNoteViewRaw` — the latter has no built-in slash menu/toolbar
+## Gotchas
 
-## Sync: y-sweet (chosen over y-websocket)
-- **y-sweet** (chosen): Built-in auth, persistence, and sync by the Yjs/Jamsocket team. Self-hostable. Required because notes are private — y-websocket has zero access control (anyone with the URL can read/write).
-- **y-websocket**: Simple open-source WebSocket provider. No auth, no built-in persistence. Only suitable for public/unauthenticated use cases.
-
-Client: `@y-sweet/client` on the frontend. Server: `y-sweet` (self-hosted or Jamsocket cloud).
-
-## Future: 3D Graph Canvas (planned, not implemented)
-
-The 2D ReactFlow graph is MVP. A 3D graph would better represent the spatial thinking vision (like Constella's infinite canvas, but in 3D). Key considerations:
-
-- **Library**: `@react-three/fiber` (Three.js for React) + `@react-three/drei` for helpers
-- **Node layout**: Force-directed 3D graph (like `three-forcegraph` or `ngraph.forcelayout3d`)
-- **Navigation**: Orbit controls (rotate, pan, zoom). Nodes are spheres, edges are lines/curves.
-- **Interaction**: Click node → open detail panel (same as current 2D). Hover → show preview card.
-- **Performance**: For <1000 nodes, Three.js handles fine. Instanced rendering for >1000.
-- **Fallback**: Keep 2D ReactFlow as the default. 3D as an optional view toggle.
-- **Challenge**: Text labels in 3D are harder to render cleanly. Use canvas-texture sprites or CSS overlays.
-- **Timeline**: Post-MVP, after sync and AI are functional.
+- **CWD must be project root** for all pnpm and cargo commands
+- **Cargo not in PATH** after install: add `%USERPROFILE%\.cargo\bin`
+- **LM Studio must be running** at `http://localhost:1234/v1` before `pnpm tauri dev`; AI errors fail gracefully
+- **Vite port 1420** is fixed (Tauri expects this); dev on network requires `TAURI_DEV_HOST` env
+- **Saved streams are at `%APPDATA%\com.matic.dialoq\streams\*.ydoc`**; to reset the app, delete these files
+- **TypeScript strict**: `noUnusedLocals` and `noUnusedParameters` are on — prefix unused params with `_`
+- **y-sweet sync not yet implemented** — planned for multi-device sync, not wired up currently
